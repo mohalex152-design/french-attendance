@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>لوحة المدرس</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><div class="logo">🇫🇷 French Attendance</div><nav><a href="index.html">الرئيسية</a><a href="student.html">الطالب</a></nav></header>
+<main class="wrap"><section class="panel">
+<div class="head"><div><h1>لوحة المدرس 📊</h1><p class="muted">QR الحضور الحالي</p></div><button class="btn" onclick="print()">طباعة QR</button></div>
+<div class="qr"><div id="qrcode"></div><p>امسح الكود من أي موبايل متصل بالإنترنت</p></div>
+<div class="stat"><b id="count">0</b><span>حاضر اليوم</span></div>
+<div class="head"><h2>الحاضرون اليوم</h2><button class="danger" onclick="clearToday()">مسح حضور اليوم</button></div>
+<div class="tablewrap"><table><thead><tr><th>#</th><th>الاسم</th><th>الوقت</th><th>الحالة</th></tr></thead><tbody id="rows"></tbody></table></div>
+</section></main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+const U="https://vjqpsftfkoydahinhrbs.supabase.co", K="sb_publishable_0tLGXQ6XwJCKRBQltE1UkA_Lv7VOnJ2";
+const studentUrl=new URL("student.html",location.href).href;
+new QRCode(document.getElementById("qrcode"),{text:studentUrl,width:240,height:240});
+async function load(){
+ const d=new Date().toISOString().slice(0,10);
+ const r=await fetch(U+"/rest/v1/attendance?select=student_name,attendance_time,status&attendance_date=eq."+d+"&order=attendance_time.asc",{headers:{apikey:K,Authorization:"Bearer "+K}});
+ const data=await r.json(); document.getElementById("count").textContent=data.length;
+ document.getElementById("rows").innerHTML=data.map((x,i)=>"<tr><td>"+(i+1)+"</td><td>"+esc(x.student_name)+"</td><td>"+new Date(x.attendance_time).toLocaleTimeString("ar-EG",{hour:"2-digit",minute:"2-digit"})+"</td><td>🟢 حاضر</td></tr>").join("");
+}
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
+async function clearToday(){if(!confirm("مسح حضور اليوم؟"))return; const d=new Date().toISOString().slice(0,10);
+ const r=await fetch(U+"/rest/v1/attendance?attendance_date=eq."+d,{method:"DELETE",headers:{apikey:K,Authorization:"Bearer "+K}});
+ if(r.ok)load(); else alert("لم يتم المسح.");}
+load(); setInterval(load,5000);
+</script>
+</body></html>
