@@ -1,0 +1,828 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+
+<head>
+
+    <meta charset="utf-8">
+
+    <meta name="viewport"
+          content="width=device-width,initial-scale=1">
+
+    <title>لوحة المدرس</title>
+
+    <link rel="stylesheet" href="style.css">
+
+</head>
+
+<body>
+
+
+
+<script>
+
+if (
+    sessionStorage.getItem("teacherLoggedIn") !== "1" &&
+    localStorage.getItem("teacherRemembered") !== "1"
+) {
+
+    window.location.replace("login.html");
+
+}
+
+</script>
+
+
+
+<header>
+
+    <div class="logo">
+        🇫🇷 French Attendance
+    </div>
+
+    <nav>
+
+        <a href="index.html">
+            الرئيسية
+        </a>
+
+        <a href="student.html">
+            الطالب
+        </a>
+
+        <a href="#" onclick="logout(); return false;">
+            تسجيل خروج 🔒
+        </a>
+
+    </nav>
+
+</header>
+
+
+
+<main class="wrap">
+
+<section class="panel">
+
+
+
+    <div class="head">
+
+        <div>
+
+            <h1>
+                لوحة المدرس 📊
+            </h1>
+
+            <p class="muted">
+
+                📅 تاريخ الحضور:
+                <b id="todayDate"></b>
+
+            </p>
+
+        </div>
+
+
+        <button
+            class="btn"
+            onclick="window.print()">
+
+            🖨️ طباعة QR
+
+        </button>
+
+    </div>
+
+
+
+    <!-- QR -->
+
+    <div class="qr">
+
+        <div id="qrcode"></div>
+
+        <p>
+            امسح الكود من أي موبايل متصل بالإنترنت
+        </p>
+
+    </div>
+
+
+
+
+    <div class="stat">
+
+        <b id="count">
+            0
+        </b>
+
+        <span>
+            حاضر اليوم
+        </span>
+
+    </div>
+
+
+
+
+
+    <div class="card" style="margin-bottom:20px;">
+
+        <h3>
+            ➕ إضافة طالب يدويًا
+        </h3>
+
+        <p class="muted">
+            استخدمها لو الطالب معهوش موبايل.
+        </p>
+
+
+        <form id="addStudentForm">
+
+            <label>
+                اسم الطالب
+            </label>
+
+            <input
+                type="text"
+                id="manualStudentName"
+                maxlength="60"
+                placeholder="اكتب اسم الطالب"
+                required
+            >
+
+
+            <button
+                type="submit"
+                class="btn full"
+                id="addStudentBtn">
+
+                ➕ إضافة الطالب
+
+            </button>
+
+        </form>
+
+
+        <div id="addMessage"></div>
+
+    </div>
+
+
+
+  
+
+    <div class="head">
+
+        <h2>
+            الحاضرون اليوم
+        </h2>
+
+
+        <button
+            class="danger"
+            onclick="clearToday()">
+
+            🗑️ مسح حضور اليوم
+
+        </button>
+
+    </div>
+
+
+
+    <div class="tablewrap">
+
+        <table>
+
+            <thead>
+
+                <tr>
+
+                    <th>
+                        #
+                    </th>
+
+                    <th>
+                        الاسم
+                    </th>
+
+                    <th>
+                        الوقت
+                    </th>
+
+                    <th>
+                        الحالة
+                    </th>
+
+                    <th>
+                        حذف
+                    </th>
+
+                </tr>
+
+            </thead>
+
+
+            <tbody id="rows">
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+
+</section>
+
+</main>
+
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+
+
+<script>
+
+
+const SUPABASE_URL =
+    "https://vjqpsftfkoydahinhrbs.supabase.co";
+
+const SUPABASE_KEY =
+    "sb_publishable_0tLGXQ6XwJCKRBQltE1UkA_Lv7VOnJ2";
+
+
+
+
+function getToday() {
+
+    const now = new Date();
+
+    const day =
+        String(now.getDate())
+        .padStart(2, "0");
+
+    const month =
+        String(now.getMonth() + 1)
+        .padStart(2, "0");
+
+    const year =
+        now.getFullYear();
+
+    return day + "/" + month + "/" + year;
+
+}
+
+
+function getDatabaseDate() {
+
+    const now = new Date();
+
+    const year =
+        now.getFullYear();
+
+    const month =
+        String(now.getMonth() + 1)
+        .padStart(2, "0");
+
+    const day =
+        String(now.getDate())
+        .padStart(2, "0");
+
+    return year + "-" + month + "-" + day;
+
+}
+
+
+document.getElementById("todayDate").textContent =
+    getToday();
+
+
+
+const studentUrl =
+    new URL(
+        "student.html",
+        location.href
+    ).href;
+
+
+new QRCode(
+    document.getElementById("qrcode"),
+    {
+        text: studentUrl,
+        width: 240,
+        height: 240
+    }
+);
+
+
+
+
+async function load() {
+
+    const today =
+        getDatabaseDate();
+
+
+    try {
+
+        const response =
+            await fetch(
+
+                SUPABASE_URL +
+                "/rest/v1/attendance" +
+
+                "?select=id,student_name,attendance_time,status" +
+
+                "&attendance_date=eq." +
+                today +
+
+                "&order=attendance_time.asc",
+
+                {
+
+                    headers: {
+
+                        "apikey":
+                            SUPABASE_KEY,
+
+                        "Authorization":
+                            "Bearer " +
+                            SUPABASE_KEY
+
+                    }
+
+                }
+
+            );
+
+
+        const data =
+            await response.json();
+
+
+        document.getElementById("count")
+            .textContent =
+            data.length;
+
+
+        const rows =
+            document.getElementById("rows");
+
+
+        rows.innerHTML = "";
+
+
+        data.forEach(
+            (student, index) => {
+
+                const time =
+                    new Date(
+                        student.attendance_time
+                    ).toLocaleTimeString(
+                        "ar-EG",
+                        {
+                            hour: "2-digit",
+                            minute: "2-digit"
+                        }
+                    );
+
+
+                rows.innerHTML += `
+
+                    <tr>
+
+                        <td>
+                            ${index + 1}
+                        </td>
+
+                        <td>
+                            ${esc(student.student_name)}
+                        </td>
+
+                        <td>
+                            ${time}
+                        </td>
+
+                        <td>
+                            🟢 حاضر
+                        </td>
+
+                        <td>
+
+                            <button
+                                class="danger"
+                                onclick="deleteStudent(${student.id})">
+
+                                🗑️ حذف
+
+                            </button>
+
+                        </td>
+
+                    </tr>
+
+                `;
+
+            }
+        );
+
+
+    } catch (error) {
+
+        console.error(error);
+
+    }
+
+}
+
+
+
+
+function esc(value) {
+
+    return String(value)
+        .replace(
+            /[&<>"']/g,
+            function(match) {
+
+                return {
+
+                    "&": "&amp;",
+                    "<": "&lt;",
+                    ">": "&gt;",
+                    '"': "&quot;",
+                    "'": "&#039;"
+
+                }[match];
+
+            }
+        );
+
+}
+
+
+
+
+document
+.getElementById("addStudentForm")
+.addEventListener(
+    "submit",
+    async function(e) {
+
+        e.preventDefault();
+
+
+        const input =
+            document.getElementById(
+                "manualStudentName"
+            );
+
+
+        const button =
+            document.getElementById(
+                "addStudentBtn"
+            );
+
+
+        const message =
+            document.getElementById(
+                "addMessage"
+            );
+
+
+        const name =
+            input.value.trim();
+
+
+        if (!name) {
+
+            message.className =
+                "error";
+
+            message.textContent =
+                "اكتب اسم الطالب أولًا ❌";
+
+            return;
+
+        }
+
+
+        button.disabled = true;
+
+        button.textContent =
+            "جاري الإضافة...";
+
+
+        message.className = "";
+
+        message.textContent =
+            "جاري إضافة الطالب...";
+
+
+        try {
+
+            const response =
+                await fetch(
+
+                    SUPABASE_URL +
+                    "/rest/v1/attendance",
+
+                    {
+
+                        method: "POST",
+
+                        headers: {
+
+                            "apikey":
+                                SUPABASE_KEY,
+
+                            "Authorization":
+                                "Bearer " +
+                                SUPABASE_KEY,
+
+                            "Content-Type":
+                                "application/json",
+
+                            "Prefer":
+                                "return=minimal"
+
+                        },
+
+                        body:
+                        JSON.stringify({
+
+                            student_name:
+                                name
+
+                        })
+
+                    }
+
+                );
+
+
+            if (response.ok) {
+
+                message.className =
+                    "success";
+
+                message.textContent =
+                    "تم إضافة الطالب بنجاح ✅";
+
+
+                input.value = "";
+
+
+                load();
+
+
+            } else {
+
+                const errorText =
+                    await response.text();
+
+
+                console.error(
+                    errorText
+                );
+
+
+                message.className =
+                    "error";
+
+                message.textContent =
+                    "لم تتم إضافة الطالب ❌";
+
+            }
+
+
+        } catch (error) {
+
+            console.error(error);
+
+
+            message.className =
+                "error";
+
+            message.textContent =
+                "حدث خطأ في الاتصال ❌";
+
+        }
+
+
+        button.disabled = false;
+
+        button.textContent =
+            "➕ إضافة الطالب";
+
+    }
+);
+
+
+
+
+
+async function deleteStudent(id) {
+
+    if (
+        !confirm(
+            "هل تريد حذف حضور هذا الطالب؟"
+        )
+    ) {
+
+        return;
+
+    }
+
+
+    try {
+
+        const response =
+            await fetch(
+
+                SUPABASE_URL +
+                "/rest/v1/attendance?id=eq." +
+                id,
+
+                {
+
+                    method: "DELETE",
+
+                    headers: {
+
+                        "apikey":
+                            SUPABASE_KEY,
+
+                        "Authorization":
+                            "Bearer " +
+                            SUPABASE_KEY
+
+                    }
+
+                }
+
+            );
+
+
+        if (response.ok) {
+
+            alert(
+                "تم حذف الطالب بنجاح ✅"
+            );
+
+            load();
+
+        } else {
+
+            alert(
+                "لم يتم حذف الطالب ❌"
+            );
+
+        }
+
+
+    } catch (error) {
+
+        console.error(error);
+
+        alert(
+            "حدث خطأ أثناء الحذف ❌"
+        );
+
+    }
+
+}
+
+
+
+
+
+async function clearToday() {
+
+    if (
+        !confirm(
+            "هل تريد مسح حضور اليوم بالكامل؟"
+        )
+    ) {
+
+        return;
+
+    }
+
+
+    const today =
+        getDatabaseDate();
+
+
+    try {
+
+        const response =
+            await fetch(
+
+                SUPABASE_URL +
+                "/rest/v1/attendance" +
+
+                "?attendance_date=eq." +
+                today,
+
+                {
+
+                    method: "DELETE",
+
+                    headers: {
+
+                        "apikey":
+                            SUPABASE_KEY,
+
+                        "Authorization":
+                            "Bearer " +
+                            SUPABASE_KEY
+
+                    }
+
+                }
+
+            );
+
+
+        if (response.ok) {
+
+            alert(
+                "تم مسح حضور اليوم بنجاح ✅"
+            );
+
+            load();
+
+        } else {
+
+            alert(
+                "لم يتم المسح ❌"
+            );
+
+        }
+
+
+    } catch (error) {
+
+        console.error(error);
+
+        alert(
+            "حدث خطأ أثناء المسح ❌"
+        );
+
+    }
+
+}
+
+
+
+function logout() {
+
+    sessionStorage.removeItem(
+        "teacherLoggedIn"
+    );
+
+    localStorage.removeItem(
+        "teacherRemembered"
+    );
+
+
+    window.location.replace(
+        "login.html"
+    );
+
+}
+
+
+
+load();
+
+
+
+setInterval(
+    load,
+    5000
+);
+
+
+
+setInterval(
+    function() {
+
+        document.getElementById(
+            "todayDate"
+        ).textContent =
+            getToday();
+
+    },
+    60000
+);
+
+</script>
+
+
+</body>
+
+</html>

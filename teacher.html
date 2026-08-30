@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+
+<head>
+
+    <meta charset="utf-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1">
+
+    <title>لوحة المدرس - French Attendance</title>
+
+    <link rel="stylesheet" href="style.css">
+
+</head>
+
+
+<body>
+
+
+
+<script>
+
+    if (
+        sessionStorage.getItem("teacherLoggedIn") !== "1" &&
+        localStorage.getItem("teacherRemembered") !== "1"
+    ) {
+
+        window.location.replace("login.html");
+
+    }
+
+</script>
+
+
+
+<header>
+
+    <div class="logo">
+        🇫🇷 French Attendance
+    </div>
+
+
+    <nav>
+
+        <a href="index.html">
+            الرئيسية
+        </a>
+
+        <a href="student.html">
+            الطالب
+        </a>
+
+        <a href="#" onclick="logout(); return false;">
+            تسجيل خروج 🔒
+        </a>
+
+    </nav>
+
+</header>
+
+
+
+<main class="wrap">
+
+    <section class="panel">
+
+
+        <div class="head">
+
+            <div>
+
+                <h1>
+                    لوحة المدرس 📊
+                </h1>
+
+                <p class="muted">
+                    QR الحضور الحالي
+                </p>
+
+            </div>
+
+
+            <button
+                class="btn"
+                onclick="window.print()"
+            >
+                🖨️ طباعة QR
+            </button>
+
+        </div>
+
+
+
+ 
+
+        <div class="qr">
+
+            <div id="qrcode"></div>
+
+            <p>
+                امسح الكود من أي موبايل متصل بالإنترنت
+            </p>
+
+        </div>
+
+
+
+        <!-- عدد الحاضرين -->
+
+        <div class="stat">
+
+            <b id="count">
+                0
+            </b>
+
+            <span>
+                حاضر اليوم
+            </span>
+
+        </div>
+
+
+
+        <div class="head">
+
+            <h2>
+                الحاضرون اليوم
+            </h2>
+
+
+            <button
+                class="danger"
+                onclick="clearToday()"
+            >
+                🗑️ مسح حضور اليوم
+            </button>
+
+        </div>
+
+
+
+
+
+        <div class="tablewrap">
+
+            <table>
+
+                <thead>
+
+                    <tr>
+
+                        <th>
+                            #
+                        </th>
+
+                        <th>
+                            الاسم
+                        </th>
+
+                        <th>
+                            الوقت
+                        </th>
+
+                        <th>
+                            الحالة
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+
+                <tbody id="rows">
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+
+    </section>
+
+</main>
+
+
+
+<script
+src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js">
+</script>
+
+
+
+<script>
+
+
+
+
+const SUPABASE_URL =
+    "https://vjqpsftfkoydahinhrbs.supabase.co";
+
+const SUPABASE_KEY =
+    "sb_publishable_0tLGXQ6XwJCKRBQltE1UkA_Lv7VOnJ2";
+
+
+
+
+
+const studentUrl =
+    new URL(
+        "student.html",
+        window.location.href
+    ).href;
+
+
+new QRCode(
+    document.getElementById("qrcode"),
+    {
+        text: studentUrl,
+        width: 240,
+        height: 240
+    }
+);
+
+
+
+
+
+async function loadAttendance() {
+
+    try {
+
+        /*
+        تاريخ اليوم
+        */
+
+        const today =
+            new Date()
+            .toISOString()
+            .slice(0, 10);
+
+
+        const response =
+            await fetch(
+
+                SUPABASE_URL +
+                "/rest/v1/attendance" +
+
+                "?select=student_name,attendance_time,status" +
+
+                "&attendance_date=eq." +
+                today +
+
+                "&order=attendance_time.asc",
+
+                {
+
+                    method: "GET",
+
+                    headers: {
+
+                        "apikey":
+                            SUPABASE_KEY,
+
+                        "Authorization":
+                            "Bearer " +
+                            SUPABASE_KEY
+
+                    }
+
+                }
+
+            );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                "حدث خطأ في تحميل الحضور"
+            );
+
+        }
+
+
+        const data =
+            await response.json();
+
+
+
+        
+
+        document.getElementById("count")
+            .textContent =
+            data.length;
+
+
+
+      
+
+        const rows =
+            document.getElementById("rows");
+
+
+        rows.innerHTML = "";
+
+
+        data.forEach(
+            (student, index) => {
+
+                const tr =
+                    document.createElement("tr");
+
+
+                const number =
+                    document.createElement("td");
+
+                number.textContent =
+                    index + 1;
+
+
+                const name =
+                    document.createElement("td");
+
+                name.textContent =
+                    student.student_name;
+
+
+                const time =
+                    document.createElement("td");
+
+                time.textContent =
+                    new Date(
+                        student.attendance_time
+                    ).toLocaleTimeString(
+                        "ar-EG",
+                        {
+                            hour: "2-digit",
+                            minute: "2-digit"
+                        }
+                    );
+
+
+                const status =
+                    document.createElement("td");
+
+                status.textContent =
+                    "🟢 حاضر";
+
+
+                tr.appendChild(number);
+
+                tr.appendChild(name);
+
+                tr.appendChild(time);
+
+                tr.appendChild(status);
+
+
+                rows.appendChild(tr);
+
+            }
+        );
+
+
+    } catch (error) {
+
+        console.error(error);
+
+    }
+
+}
+
+
+
+
+
+async function clearToday() {
+
+
+    const confirmed =
+        confirm(
+            "هل تريد مسح حضور اليوم بالكامل؟"
+        );
+
+
+    if (!confirmed) {
+
+        return;
+
+    }
+
+
+    try {
+
+
+        const today =
+            new Date()
+            .toISOString()
+            .slice(0, 10);
+
+
+        const response =
+            await fetch(
+
+                SUPABASE_URL +
+                "/rest/v1/attendance" +
+
+                "?attendance_date=eq." +
+                today,
+
+                {
+
+                    method: "DELETE",
+
+                    headers: {
+
+                        "apikey":
+                            SUPABASE_KEY,
+
+                        "Authorization":
+                            "Bearer " +
+                            SUPABASE_KEY
+
+                    }
+
+                }
+
+            );
+
+
+        if (response.ok) {
+
+            alert(
+                "تم مسح حضور اليوم بنجاح ✅"
+            );
+
+
+            loadAttendance();
+
+        } else {
+
+            alert(
+                "لم يتم مسح الحضور ❌"
+            );
+
+        }
+
+
+    } catch (error) {
+
+        console.error(error);
+
+        alert(
+            "حدث خطأ في الاتصال بقاعدة البيانات ❌"
+        );
+
+    }
+
+}
+
+
+
+
+function logout() {
+
+    sessionStorage.removeItem(
+        "teacherLoggedIn"
+    );
+
+
+    localStorage.removeItem(
+        "teacherRemembered"
+    );
+
+
+    window.location.replace(
+        "login.html"
+    );
+
+}
+
+
+
+
+loadAttendance();
+
+
+
+
+setInterval(
+    loadAttendance,
+    5000
+);
+
+
+</script>
+
+
+</body>
+
+</html>
